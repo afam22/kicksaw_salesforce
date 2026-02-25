@@ -7,16 +7,16 @@ This codebase provides a robust, scalable, and secure integration for synchroniz
 1. **DML Event**: A `Lead` is inserted or updated.
 2. **Trigger Handler**: `LeadTriggerHandler` evaluates the record. It prevents recursive loops and filters out updates that do not require a sync (e.g., if relevant outbound fields did not change).
 3. **Service Layer**: `LeadSyncService` receives the filtered Lead IDs and enqueues the asynchronous job.
-4. **Queueable Execution**: `LeadSyncQueueable` processes the IDs in safe batches (chunks). It queries the Leads, maps the data, and initiates the HTTP callout.
+4. **Batch Execution**: `LeadSyncBatch` processes the IDs in safe increments (`BATCH_SIZE = 50`). It queries the Leads, maps the data, and initiates the HTTP callouts.
 5. **Callout Execution**: `LeadApiClient` handles the actual HTTP POST request using secure Named Credentials and processes the JSON response.
-6. **DML & Logging**: The Queueable updates successful Leads with their new `External_Reference_Id__c`. If an API failure, Callout Exception, or DML error occurs, it passes the context to the `IntegrationLogger`, which safely persists the errors to the `Integration_Log__c` custom object. If records remain to be processed, the Queueable chains itself.
+6. **DML & Logging**: The Batcheable updates successful Leads with their new `External_Reference_Id__c`. If an API failure, Callout Exception, or DML error occurs, it passes the context to the `IntegrationLogger`, which safely persists the errors to the `Integration_Log__c` custom object. 
 
 ---
 
 ## Key Design Decisions
 
+* **Enterprise Bulkification (Batch Apex)**: Instead of relying on `Queueable` chaining—which carries the risk of hitting the `Maximum stack depth` exception during massive Data Loader inserts—this architecture uses `Database.Batchable`. Salesforce natively manages the batch queuing, ensuring that an insert of 10,000+ Leads scales safely without failing.
 * **Security via Named Credentials**: Hardcoded endpoints and API keys have been completely removed from the Apex code. Authentication is managed natively by Salesforce using External Credentials and Named Credentials, ensuring API keys are securely encrypted and injected at runtime.
-* **Bulkification & Governor Limit Safety**: The integration is built to handle large data volumes (like Data Loader inserts). The `LeadSyncQueueable` implements a chunking pattern (`CHUNK_SIZE = 50`) to process subsets of records and safely chain itself, avoiding the `Callout limit` (100 per transaction) and `CPU timeout` limits.
 * **Recursion Prevention**: The `LeadTriggerHandler` uses a static `processed` Set to ensure that updates originating from the integration itself (such as writing back the `External_Reference_Id__c`) do not trigger an infinite loop of callouts.
 * **Intelligent Filtering**: Callouts are expensive. The handler compares `Trigger.oldMap` and `Trigger.new` to ensure callouts only fire when specific, mapped fields (FirstName, LastName, Company, Email, LeadSource, Status) are modified.
 * **Secure Error Logging & Fault Tolerance**: Failures do not crash the transaction. The `IntegrationLogger` safely persists errors to a custom object. It strictly enforces Salesforce security guidelines by checking Object-level (CRUD) permissions (`isCreateable`) and utilizing `Security.stripInaccessible` for Field-Level Security (FLS). If database insertion fails or the user lacks permission, it gracefully falls back to `System.debug`.
@@ -28,13 +28,13 @@ This codebase provides a robust, scalable, and secure integration for synchroniz
 | Component           | Type           | Responsibility                                                                                                                |
 | :---                | :---           | :---                                                                                                                          |
 | `LeadTrigger`       | Trigger        | Captures `after insert` and `after update` contexts.                                                                          |
-| `LeadTriggerHandler`| Apex Class     | Contains the logic to evaluate if a Lead should be synced. Manages the recursion guard.                                     |
-| `LeadSyncService`   | Apex Class     | Orchestrator for enqueueing the async job. Defines the `CHUNK_SIZE`.                                                          |
-| `LeadSyncQueueable` | Queueable Apex | Handles chunking, querying, delegating callouts, updating the database, and chaining remaining records.                       |
+| `LeadTriggerHandler`| Apex Class     | Contains the logic to evaluate if a Lead should be synced. Manages the recursion guard.                                       |
+| `LeadSyncService`   | Apex Class     | Orchestrator for enqueueing the async job. Defines the `BATCH_SIZE`.                                                          |
+| `LeadSyncBatch`     | Batch Apex     | Queries data, delegates callouts, handles DML updates, and manages limits safely at scale.                                    |   
 | `LeadApiClient`     | Apex Class     | The HTTP framework. Constructs the request using the `callout:` syntax and parses standard/error JSON responses.              |
 | `IntegrationLogger` | Apex Class     | Handles secure, fault-tolerant persistence of integration errors to a custom logging object, respecting CRUD and FLS limits.  |
 | `LeadApiClientTest` | Test Class     | Provides high code coverage by testing bulk trigger execution, update logic filtering, and various mocked HTTP scenarios.     |
-| `LeadApiClientMock` | HttpCalloutMock| A dynamic stunt double for external HTTP traffic during unit tests. |
+| `LeadApiClientMock` | HttpCalloutMock| A dynamic stunt double for external HTTP traffic during unit tests.                                                           |
 ---
 
 ## Salesforce Configuration Requirements
