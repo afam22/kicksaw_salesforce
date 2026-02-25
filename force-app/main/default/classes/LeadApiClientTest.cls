@@ -185,4 +185,38 @@ private class LeadApiClientTest {
         System.assertEquals(401, logs[0].Status_Code__c, 'Status code should be logged as 401.');
         System.assert(logs[0].Message__c.contains('Invalid authentication token'), 'The specific error message should be extracted and logged.');
     }
+
+    @isTest
+    static void testLoggerNoCrudPermissionFallback() {
+        // 1. Force the logger to go down the fallback branch deterministically
+        IntegrationLogger.forceNoCreateAccessForTest = true;
+
+        // 2. Use a real Lead Id (no fake IDs) to prevent future validation breaks
+        Lead l = new Lead(LastName = 'LogTest', Company = 'Acme', Status = 'New');
+        insert l;
+
+        IntegrationLogger.LogEntry entry = IntegrationLogger.error(
+            'TestIntegration',
+            l.Id,
+            'Test Permission Error',
+            500,
+            'Internal Server Error'
+        );
+
+        // 3. Execute the logger context
+        Test.startTest();
+        IntegrationLogger.flush(new List<IntegrationLogger.LogEntry>{ entry });
+        Test.stopTest();
+
+        // 4. Assert Results
+        // Since we forced fallback, no Integration_Log__c rows should be inserted
+        System.assertEquals(
+            0,
+            [SELECT COUNT() FROM Integration_Log__c],
+            'No logs should be inserted when fallback path is used.'
+        );
+
+        // 5. Reset flag so it doesn't leak into other tests in the same transaction
+        IntegrationLogger.forceNoCreateAccessForTest = false;
+    }
 }

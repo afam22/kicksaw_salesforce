@@ -1,4 +1,8 @@
 public with sharing class IntegrationLogger {
+
+    @TestVisible
+    private static Boolean forceNoCreateAccessForTest = false;
+
     public class LogEntry {
         public String integrationName;
         public Id recordId;
@@ -23,6 +27,12 @@ public with sharing class IntegrationLogger {
     @SuppressWarnings('PMD.ApexCRUDViolation')
     public static void flush(List<LogEntry> entries) {
         if (entries == null || entries.isEmpty()) {
+            return;
+        }
+
+        // Deterministic test hook to force the fallback path
+        if (Test.isRunningTest() && forceNoCreateAccessForTest) {
+            debugFallback(entries);
             return;
         }
 
