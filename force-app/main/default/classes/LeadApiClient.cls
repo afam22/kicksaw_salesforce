@@ -1,5 +1,7 @@
 public with sharing class LeadApiClient {
     private static final String ENDPOINT = 'callout:Postman_Lead_API/lead';
+    // Set timeout to 120 seconds (maximum allowed by Salesforce)
+    private static final Integer TIMEOUT_MS = 120000;
 
     public class Response {
         public Boolean success;
@@ -8,13 +10,14 @@ public with sharing class LeadApiClient {
         public Integer statusCode;
         public String rawResponse;
     }
-    
+
     public static Response sendLead(Lead lead) {
         Response response = new Response();
         HttpRequest req = new HttpRequest();
         req.setMethod('POST');
         req.setEndpoint(ENDPOINT);
         req.setHeader('Content-Type', 'application/json');
+        req.setTimeout(TIMEOUT_MS);
 
         Map<String, Object> body = new Map<String, Object>{
             'FirstName'  => lead.FirstName,
