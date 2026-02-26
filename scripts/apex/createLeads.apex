@@ -1,6 +1,6 @@
 List<Lead> leadsToInsert = new List<Lead>();
 
-for (Integer i = 1; i <= 200; i++) {
+for (Integer i = 1; i <= 500; i++) {
     Lead l = new Lead(
         FirstName = 'Automated',
         LastName  = 'Lead' + i,

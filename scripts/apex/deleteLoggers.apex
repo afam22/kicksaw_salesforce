@@ -1,0 +1,1 @@
+System.debug([SELECT COUNT() FROM Integration_Log__c]);

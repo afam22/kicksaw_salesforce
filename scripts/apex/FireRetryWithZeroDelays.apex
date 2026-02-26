@@ -1,0 +1,1 @@
+Database.executeBatch(new LeadSyncRetryBatch(0), LeadSyncService.BATCH_SIZE);
