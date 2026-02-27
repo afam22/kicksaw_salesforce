@@ -1,1 +1,1 @@
-System.debug([SELECT COUNT() FROM Integration_Log__c]);
+delete [SELECT Id FROM Integration_Log__c];
