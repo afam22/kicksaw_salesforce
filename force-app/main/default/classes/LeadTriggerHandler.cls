@@ -58,7 +58,7 @@ public with sharing class LeadTriggerHandler {
         }
         
 
-        // Sync when outbound fields changed OR external id blank - retry mechanism but manual
+        // Sync when outbound fields changed OR external id blank
         return outboundFieldsChanged(lead, oldLead) || String.isBlank(lead.External_Reference_Id__c);
     }
 
